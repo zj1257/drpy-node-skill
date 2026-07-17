@@ -3,6 +3,8 @@ name: drpy-node-play-debug
 description: 适用于 drpy-node 源播放链路排查与 lazy 修复。用户提到"播放不通""lazy 不对""play.html 被当直链""iframe 提取""m3u8 提取""parse:0/1 判断""假播放""站外解析""加密链接""webplay""不能播""播放空白""播放器打不开""花屏""解密""防盗链"时使用。专注判断播放是否真实可播；detail 不稳定、整体修源和仓库上传应分流。
 ---
 
+> ⚠️ **已归档（2026-07-17）**：本 skill 已被 [`drpy-node-coder`](../drpy-node-coder/SKILL.md) 取代。coder 融合了 4 个旧 skill（workflow/create/play-debug/repo-upload）的全部工作流，并自带 `scripts/cli.js` CLI 替代 drpy-node-mcp 服务——一个 skill、无需安装 MCP。本文件保留仅供历史参考，新工作请直接用 drpy-node-coder。
+
 # drpy-node Play Debug
 
 ## 快速索引

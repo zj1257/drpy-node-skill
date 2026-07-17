@@ -3,6 +3,8 @@ name: drpy-node-source-workflow
 description: 适用于 drpy-node 源修复、调试、测试与可用性评估。用户提到"修源""测试某个源""详情为空""播放不通""搜索异常""源无效""低分评估""源评分低""诊断""排障""修播放""源不通""规则不生效""评估低分"时使用。负责先评估、再分流、再收束上传建议；不直接执行仓库上传/替换/改标签。
 ---
 
+> ⚠️ **已归档（2026-07-17）**：本 skill 已被 [`drpy-node-coder`](../drpy-node-coder/SKILL.md) 取代。coder 融合了 4 个旧 skill（workflow/create/play-debug/repo-upload）的全部工作流，并自带 `scripts/cli.js` CLI 替代 drpy-node-mcp 服务——一个 skill、无需安装 MCP。本文件保留仅供历史参考，新工作请直接用 drpy-node-coder。
+
 # drpy-node Source Workflow
 
 ## 快速索引

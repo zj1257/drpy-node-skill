@@ -1,0 +1,4 @@
+node_modules/
+.drpy-root
+local/
+*.log

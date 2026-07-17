@@ -3,6 +3,8 @@ name: drpy-node-repo-upload
 description: 适用于 drpy-node 源仓库上传、替换、标签修正、公开/私密切换与上传前校验。用户提到”上传仓库””替换上传””改标签””仓库里的文件信息””上传前检查””发布源””同步源””仓库管理””打标签””分享源”时使用。专注发布守门和结果核验；不负责修源或播放排障。
 ---
 
+> ⚠️ **已归档（2026-07-17）**：本 skill 已被 [`drpy-node-coder`](../drpy-node-coder/SKILL.md) 取代。coder 融合了 4 个旧 skill（workflow/create/play-debug/repo-upload）的全部工作流，并自带 `scripts/cli.js` CLI 替代 drpy-node-mcp 服务——一个 skill、无需安装 MCP。本文件保留仅供历史参考，新工作请直接用 drpy-node-coder。
+
 # drpy-node Repo Upload
 
 ## 快速索引

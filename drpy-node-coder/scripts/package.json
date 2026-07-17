@@ -1,0 +1,13 @@
+{
+  "name": "drpy-node-coder-cli",
+  "version": "1.0.0",
+  "description": "自包含 CLI，替代 drpy-node-mcp 服务。零 npm 依赖：localDsCore bundle + sqlite + 编码 wasm 自带于 vendor/，req/pdfa/drpyS/DS解密 复用 drpy-node 项目源码。",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "drpy-coder": "cli.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,90 @@
+# CLI 完整命令速查（scripts/cli.js）
+
+统一入口：`node scripts/cli.js [--root <drpy-node路径>] <命令> [位置参数] [--flags]`
+输出：成功 `{"ok":true,"data":...}` / 失败 `{"ok":false,"error":"...","message":"..."}`（退出码非0）。
+参数：`--flag value` / `--flag=value` / `--header k=v`（可重复）；位置参数在前。大文本用 `--content-file <path>` 或 stdin。
+
+## 元命令
+| 命令 | 说明 |
+|---|---|
+| `setup <drpy-node-绝对路径>` | 写入 `.drpy-root`，定位项目根 |
+| `where` | 显示当前定位的 drpy-node 根 |
+| `doctor` | 自检：node 版本、根定位、7 个运行时模块存在性、house 配置 |
+| `help` | 列出所有可用命令 |
+
+## 文件系统 fs（移植 fsTools；写操作有安全护栏+写后回读验证）
+| 命令 | flags | 对应 MCP |
+|---|---|---|
+| `fs ls [path]` | | drpy_list_directory |
+| `fs read <path>` | .js 自动 DS 解密 | drpy_read_file |
+| `fs write <path>` | `--content` / `--content-file` / stdin | drpy_write_file |
+| `fs rm <path>` | | drpy_delete_file |
+| `fs edit <path> <op>` | op=replace_text/replace_lines/delete_lines/insert_lines；`--search --replacement` 或 `--start-line --end-line --content`；JS 写盘前语法校验 | drpy_edit_file |
+| `fs find <path> <keyword>` | `--regex --surrounding-lines N --max-matches N` | drpy_find_in_file |
+
+## 爬虫开发（移植 spiderTools；运行时命令用 drpy req/jsoup）
+| 命令 | flags | 对应 MCP |
+|---|---|---|
+| `src list` | 列 spider/js + spider/catvod | list_sources |
+| `src routes` | 读 controllers/index.js | get_routes_info |
+| `fetch <url>` | `--method --header k=v --data` | fetch_spider_url |
+| `analyze <url>` | `--header`；清洗 HTML 输出精简 DOM | analyze_website_structure |
+| `guess <url>` | `--header`；探 12 个内置模板 | guess_spider_template |
+| `debug --rule <r> --mode <m>` | m=pdfa/pdfh/pd；`--url\|--html --base-url --header` | debug_spider_rule |
+| `filter <url...>` | `--gzip --header`；提取筛选字典（用 req） | extract_website_filter |
+| `iframe <url>` | `--header`；提取播放页 iframe src | extract_iframe_src |
+| `template` | 标准源模板 | get_spider_template |
+| `libs` | drpy 全局函数库参考 | get_drpy_libs_info |
+| `api-list` | drpy API 端点列表 | get_drpy_api_list |
+| `claw-ds [--lang en\|zh]` | 自动写源 Prompt | get_claw_ds_skill |
+
+## 验证（移植 spiderTools；validate 用 vm sandbox，resolved 用 drpyS）
+| 命令 | 说明 | 对应 MCP |
+|---|---|---|
+| `syntax <path>` | 读+DS解密+vm.Script 语法检查 | drpy_check_syntax |
+| `validate <path>` | sandbox 跑源码 + 校验 rule 必填字段(title/host/url) | validate_spider |
+| `resolved <path>` | drpyS.getRuleObject 模板继承后最终 rule 摘要 | get_resolved_rule |
+
+## 测试（移植 spiderTestTools；依赖 localDsCore 引擎）
+| 命令 | flags | 对应 MCP |
+|---|---|---|
+| `test <source> <home\|category\|detail\|search\|play>` | `--class-id --ids --keyword --play-url --flag --ext` | test_spider_interface |
+| `evaluate <source>` | `--class-id --keyword --timeout`；全流程评分(首页20+一级20+二级25+播放25+搜索10=100) | evaluate_spider_source |
+
+> 首次调用 test/evaluate 会加载 localDsCore 测试引擎（约 2-5s），stdout 可能有一次初始化日志，**业务 JSON 始终是 stdout 最后一行**。
+
+## 仓库 house（移植 houseTools；用全局 fetch 非 drpy req）
+| 命令 | flags | 对应 MCP |
+|---|---|---|
+| `house verify` | 验证仓库连通+TOKEN | house_verify |
+| `house list` | `--search --tag --page --limit --uploader` | house_file(list) |
+| `house upload <path>` | `--tags --is-public --auto-replace`；默认同名自动替换 | house_file(upload) |
+| `house replace <file_id> <path>` | `--tags` | house_file(replace) |
+| `house delete <file_id>` | | house_file(delete) |
+| `house info <cid>` | `--file-id` | house_file(info) |
+| `house toggle <file_id>` | 公开/私密切换 | house_file(toggle_visibility) |
+| `house tags <file_id> --tags <t>` | 更新标签 | house_file(update_tags) |
+
+## 系统（移植 systemTools + dbTools）
+| 命令 | 说明 | 对应 MCP |
+|---|---|---|
+| `logs [--lines N]` | 读 logs/ 最新 .log.txt 尾部 | read_logs |
+| `sql <query>` | 只读 SELECT（node-sqlite3-wasm 读 database.db） | sql_query |
+| `config get [key]` / `config set <k> <v>` | 点语法嵌套（如 `system.timeout`）；set 支持 JSON 值 | manage_config |
+| `restart` | PM2 重启 drpys | restart_service |
+
+## 定位优先级（pathResolver）
+
+`--root` 参数 > 环境变量 `DRPY_NODE_ROOT` > `.drpy-root` 文件 > 向上查找(含 `spider/js`+`libs_drpy/htmlParser.js`) > `../drpy-node` fallback。
+
+## 运行时分层（runtime.js 懒加载）
+
+| 层 | 模块 | 何时加载 |
+|---|---|---|
+| L1 decoder | libs_drpy/drpyCustom.js `getOriginalJs` | fs read/find/edit 的 .js 解密 |
+| L2 req | utils/req.js | fetch/analyze/guess/iframe/debug/filter |
+| L3 parser | libs_drpy/drpyInject.js + htmlParser.js | debug（注入 pdfa/pdfh/pd/jsoup） |
+| L4 drpyS | libs/drpyS.js `getRuleObject` | validate/resolved |
+| L5 engine | drpy-node-bundle/libs/localDsCore.bundled.js | test/evaluate |
+
+drpyInject 往 globalThis 注入 9 符号（幂等+守卫）；cheerio 统一用 `globalThis.cheerio`；file:// import 用 pathToFileURL（Windows 兼容）。

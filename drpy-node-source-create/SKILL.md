@@ -3,6 +3,8 @@ name: drpy-node-source-create
 description: 适用于 drpy-node 新建 DS 源。用户提到"新建源""写个 drpy 源""分析这个站做 DS 源""创建新规则""从零开始做源""写源""做源""建源""生成源""爬虫源"时使用。专注站点分析、模板判断、规则生成与初步验证；已有源修复、播放专项和仓库上传应分流到对应 skill。
 ---
 
+> ⚠️ **已归档（2026-07-17）**：本 skill 已被 [`drpy-node-coder`](../drpy-node-coder/SKILL.md) 取代。coder 融合了 4 个旧 skill（workflow/create/play-debug/repo-upload）的全部工作流，并自带 `scripts/cli.js` CLI 替代 drpy-node-mcp 服务——一个 skill、无需安装 MCP。本文件保留仅供历史参考，新工作请直接用 drpy-node-coder。
+
 # drpy-node Source Create
 
 ## 快速索引

@@ -1,0 +1,73 @@
+[
+  {
+    "id": "e2e-evaluate-existing",
+    "desc": "验证 localDsCore 引擎与全流程评分（已有源）",
+    "steps": [
+      "node cli.js --root E:/gitwork/drpy-node evaluate \"360影视[官]\" --keyword 斗罗大陆"
+    ],
+    "expect": "score=100, valid=true, 首页/一级/二级/搜索/播放全 ✅"
+  },
+  {
+    "id": "e2e-ds-decode-read",
+    "desc": "验证 DS 加密源读取解密链路",
+    "steps": [
+      "node cli.js --root E:/gitwork/drpy-node fs read \"spider/js/360影视[官].js\""
+    ],
+    "expect": "返回明文，含 var rule，decoded=true"
+  },
+  {
+    "id": "e2e-resolved-rule",
+    "desc": "验证 drpyS.getRuleObject 模板继承摘要",
+    "steps": [
+      "node cli.js --root E:/gitwork/drpy-node resolved \"spider/js/360影视[官].js\""
+    ],
+    "expect": "返回 title/host/url/一级 等继承后字段"
+  },
+  {
+    "id": "e2e-edit-syntax-guard",
+    "desc": "验证 fs edit 的 JS 语法校验护栏（坏语法不写盘）",
+    "steps": [
+      "node cli.js --root E:/gitwork/drpy-node fs write spider/js/.cli_test.js --content \"var rule = {title:'t',host:'x'};\"",
+      "node cli.js --root E:/gitwork/drpy-node fs edit spider/js/.cli_test.js replace_text --search \"var rule\" --replacement \"var broken {\"",
+      "node cli.js --root E:/gitwork/drpy-node fs read spider/js/.cli_test.js",
+      "node cli.js --root E:/gitwork/drpy-node fs rm spider/js/.cli_test.js"
+    ],
+    "expect": "edit 返回 ok:false JS_SYNTAX_CHECK_FAILED；read 确认文件未被破坏；rm 清理成功"
+  },
+  {
+    "id": "e2e-house-verify",
+    "desc": "验证仓库连通与 TOKEN",
+    "steps": [
+      "node cli.js --root E:/gitwork/drpy-node house verify"
+    ],
+    "expect": "configured=true, connected=true, token_valid=true"
+  },
+  {
+    "id": "e2e-debug-pdfa",
+    "desc": "验证 pdfa/pdfh 解析（drpyInject+jsoup）",
+    "steps": [
+      "node cli.js --root E:/gitwork/drpy-node debug --rule 'a' --mode pdfa --html '<div><a href=1>x</a><a href=2>y</a></div>'",
+      "node cli.js --root E:/gitwork/drpy-node debug --rule 'a&&href' --mode pdfh --html '<a href=http://e.com>l</a>'"
+    ],
+    "expect": "pdfa count=2; pdfh result=http://e.com"
+  },
+  {
+    "id": "e2e-full-build-flow",
+    "desc": "完整建源→测试→上传全链路（需真实可用站点）",
+    "steps": [
+      "node cli.js fetch <url>      # alive check",
+      "node cli.js guess <url>      # 探模板",
+      "node cli.js analyze <url>    # 清洗 DOM",
+      "node cli.js template         # 取模板",
+      "# 据站型写 spider/js/源名.js（fs write）",
+      "node cli.js syntax spider/js/源名.js",
+      "node cli.js validate spider/js/源名.js",
+      "node cli.js test 源名 home",
+      "node cli.js test 源名 category --class-id 1",
+      "node cli.js evaluate 源名",
+      "# L3=100 后：node cli.js house upload spider/js/源名.js --tags ds --is-public true",
+      "node cli.js house info <cid>"
+    ],
+    "expect": "evaluate score=100; house upload 返回 file_id/cid; info 核验一致"
+  }
+]
