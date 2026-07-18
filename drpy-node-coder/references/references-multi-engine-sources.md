@@ -38,7 +38,7 @@ const extStr = typeof ext === 'object' ? JSON.stringify(ext) : String(ext);
 const url = `${site.api}&extend=${encodeURIComponent(extStr)}`;
 ```
 
-> 反例：`report.json` 生成脚本若用裸 `?do=py` 不带 extend，会把所有依赖 ext 的模板源全判成"推荐和分类接口均异常"——这是报告缺陷，不是源坏。
+> 注：`apps/source-checker/index.html`（生成 report.json 的程序）实际**是带 extend 的**--它从 sites 配置的 `ext` 字段取（hipy/php 模板源 ext 由 config.js 从 `config/map.txt` SitesMap 填充）。report.json 里误判的根因是：① 快照过期（修复引擎后没重测）；② 引擎层 SSL/代理 bug；③ source-checker 自身曾有的 bug（fullCheck detail 用固定 ids=1、fetch timeout 不生效、历史报告丢 ext 等，2026-07-18 已修）。**自己复测时仍必须带 extend**，否则裸测模板源报 KeyError host。
 
 ## 三、hipy daemon 重载（改 hipy 源后必做）
 
@@ -139,4 +139,4 @@ cat 源用 `pdfa`/`pdfh`/`pd`/`cutStr`/`req`/`request`（catvod 注入）。home
 - `剧透社[盘].py` 自建 `requests.Session`，`session.verify=False` 属性在某些情况不生效，需 `session.get(..., verify=False)` 显式传参。
 - hipy 模板源（AppFox/AppGet/AppSk/getapp3.4.4）多站共用，改一个模板修复所有派生源；反之一个 ext host 失效会挂掉所有用该模板的源。
 - 大量 hipy/php 失效源是 host 死/改版（如 ldys.sq1005.top 403、99.jl8.top/1.txt 404、qkfqapi.vv9v.cn API 全 404），非源 bug，逐个验 host 后跳过。
-- `report.json` 是快照，状态会变；且若裸测不带 extend，失效数虚高。修源前先带 extend 重测拿真实清单。
+- `report.json` 是快照，状态会变；source-checker 本身带 extend，但旧快照 + 引擎 SSL/代理 bug 曾致失效数虚高（2026-07-18 已修引擎 + source-checker）。修源前建议重新跑一遍检测拿最新清单。
