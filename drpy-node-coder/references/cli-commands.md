@@ -48,8 +48,8 @@
 ## 测试（移植 spiderTestTools；依赖 localDsCore 引擎）
 | 命令 | flags | 对应 MCP |
 |---|---|---|
-| `test <source> <home\|category\|detail\|search\|play>` | `--class-id --ids --keyword --play-url --flag --ext` | test_spider_interface |
-| `evaluate <source>` | `--class-id --keyword --timeout`；全流程评分(首页20+一级20+二级25+播放25+搜索10=100) | evaluate_spider_source |
+| `test <source> <home\|category\|detail\|search\|play>` | `--class-id --ids --keyword --play-url --flag --ext`；detail 在 `vod_play_url` 为空时附 `play_url_diagnosis`(item_keys+hint) 定位根因 | test_spider_interface |
+| `evaluate <source>` | `--class-id --keyword --timeout`；全流程评分(首页20+一级20+二级25+播放25+搜索10=100)。搜索词缺省按源名后缀智能选取(漫画→海贼王/小说→修仙/短剧→离婚/音频→故事)；`--keyword ''` 跳过搜索 | evaluate_spider_source |
 
 > 首次调用 test/evaluate 会加载 localDsCore 测试引擎（约 2-5s），stdout 可能有一次初始化日志，**业务 JSON 始终是 stdout 最后一行**。
 

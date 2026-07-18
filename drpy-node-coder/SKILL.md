@@ -85,7 +85,7 @@ Step5 收束：evaluate 复评 → 🛑 检查点2 → 上传建议 / 结束
 
 **结论必须带等级**，例"L2 显示 detail 通、play 断"，不要说成"整个源不通"。单接口测试必须用上游真实返回值（category→vod_id→detail→play_url），不要手推 ID。
 
-**evaluate 丢分映射**：首页20+一级20丢 → `class_parse` 未命中；仅首页20丢 → `double` 不匹配；搜索10丢 → 换高频宽匹配词再查 `searchUrl`；二级25丢 → `detailUrl`/二级字典；播放25丢 → 转 Playwright 播放调试。
+**evaluate 丢分映射**：首页20+一级20丢 → `class_parse` 未命中；仅首页20丢 → `double` 不匹配；搜索10丢 → 已按源名后缀选默认词(漫画->海贼王/小说->修仙/短剧->离婚/音频->故事)，仍丢则换词查 `searchUrl`；二级25丢 → `detailUrl`/二级字典；播放25丢 → 先看 `test detail` 的 `play_url_diagnosis`：detail 有数据但 `vod_play_url` 空属二级选择器/detailUrl 问题(非 play 层)，按 hint 修二级；仅当 detail 完整且 play 真失败才转 Playwright 嗅探。常见误判：detail 返回列表项(只有 vod_id/vod_name/vod_pic)而非完整详情 = 缺 `detailUrl`。
 
 ## 播放调试（Playwright 复用指引）
 
