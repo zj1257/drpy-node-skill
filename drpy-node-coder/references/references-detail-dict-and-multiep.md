@@ -53,7 +53,49 @@
 
 ---
 
-## 4. 多集只吐 1 集的排障（咕咕番案例）
+## 4. tabs 的 && 后必须是元素选择器（最高频陷阱，先查这条）
+
+**症状**：detail 有数据（`vod_name`/`vod_pic` 正常），但 `vod_play_from` 和 `vod_play_url` **同时为空**，evaluate 卡在"播放跳过"。
+
+**根因**：dict 二级里 `tabs` 由 **pdfa 执行**（取元素数组）。drpy 执行逻辑（`libs/drpysParser.js` `commonDetailListParse`）：
+```js
+let p_tab = p.tabs.split(';')[0];        // 整串传给 pdfa
+let vHeader = $pdfa(html, p_tab);         // 取 tab 元素数组
+// ... playFrom 由 vHeader 生成
+for (let i = 0; i < playFrom.length; i++) {  // lists 循环次数 = playFrom 长度
+    let p1 = p.lists.replaceAll('#id', i);   // #id 替换成索引，机制可靠
+```
+
+**关键规律**：`&&` 在 pdfa 里被当作**后代选择器**（等价于空格）。所以 `tabs` 能带 `&&`，但 `&&` 后必须是**能定位到元素的合法选择器**：
+- ✅ `&&` 后是元素选择器：标签 `a`/`dt`/`li`/`dd`、`.class`、`#id` -> pdfa 正常取到后代元素
+  - `'#list&&dt'` ≡ `'#list dt'` -> 取 `#list` 下的 `dt` 元素
+  - `'.play_source_tab&&a'`（模板 `libs_drpy/template.js` 就有此写法）-> 取 `a` 元素
+- ❌ `&&` 后是 pdfh 取值段：`Text`/`Html`/`href`/`src`/`data-xxx` -> 不是合法元素选择器，pdfa 返回**空** -> `playFrom=[]` -> lists 循环 0 次 -> 播放线路全空
+
+每个 tab 的显示文本由 `tab_text` 字段控制（默认 `body&&Text`），不写在 tabs 里。
+
+**正确写法**（按站点 DOM 结构二选一）：
+```js
+二级: {
+    // 写法1：tabs 取容器自身的多个元素（无 &&）
+    tabs: '.module-tab-item',
+    // 写法2：tabs 取容器内的子元素（&& 后是元素选择器）
+    tabs: '.play_source_tab&&a',
+    tab_text: 'body&&Text',                     // 可省略，默认即此值
+    lists: '.module-play-list:eq(#id) a',       // #id 自动替换为 tab 索引
+}
+```
+
+**排查命令**：`debug --rule '<tabs选择器>' --mode pdfa --url <详情页>`，看 count 是否>0 且元素正确。`&&Text`/`&&href` 会 count=0。另查 `tab_text` 在 tab 元素上能否取到文本（取不到会被兜底成"线路空"）。
+
+**实测样本**（验证规律）：
+- 顶点小说详情页：`#list&&a`->108、`#list&&dt`->2、`#list&&dd`->106（&& 后是标签，都取到）；`#list&&Text`/`#list&&href`->0（pdfh 取值段，取不到）。完美印证"&& 后必须是元素选择器"。
+- 樱花动漫[优]：`tabs:'.play-list-group-switch-item&&Text'` -> pdfa count=0，全空；改 `tabs:'.play-list-group-switch-item'`（switch-item 本身就是 3 个 tab 元素，取自身）-> count=3，`vod_play_from=1-30$$$31-60$$$61-62`，evaluate 65->90。
+- 顶点小说[书]：`tabs:'#list&&dt'`（dt 是标签，count=2 本身合法）但 `tab_text:'dd&&Text'`（dt 上无 dd 子元素，取空->兜底"线路空"）；改 `tab_text:'body&&Text'` -> 线路名正常取到 dt 文本。这里根因是 tab_text 不是 tabs。
+
+---
+
+## 5. 多集只吐 1 集的排障（咕咕番案例）
 
 ### 问题描述
 详情页真实 DOM 已确认能抓到多集，`vod_play_from` 正常，但 `vod_play_url` 在字典模式下只吐出 1 集。

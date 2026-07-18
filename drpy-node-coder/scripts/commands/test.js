@@ -16,6 +16,62 @@ function truncateData(data, maxLen = 3000) {
   return str.substring(0, maxLen) + '\n... (数据已截断，共 ' + str.length + ' 字符)';
 }
 
+/**
+ * 按源名后缀推断更贴切的默认搜索词，避免对漫画/小说/短剧/音频类源一律搜"斗罗大陆"必然落空。
+ * 源名常见后缀：[优][官][盘][磁][漫][画][书][短][听][密]。
+ * 用户显式传 --keyword 仍优先生效；传 --keyword '' 显式跳过搜索（evaluate 原逻辑保留）。
+ */
+function defaultKeywordFor(sourceName) {
+  const m = String(sourceName).match(/\[(漫|画|书|短|听)\]/);
+  if (m) {
+    const map = { 漫: '海贼王', 画: '海贼王', 书: '修仙', 短: '离婚', 听: '故事' };
+    if (map[m[1]]) return map[m[1]];
+  }
+  return '斗罗大陆';
+}
+
+/**
+ * 详情有数据但 vod_play_url 为空时的根因诊断。
+ * drpy 二级分两类：dict 形式（tabs/lists/tab_text）与 async function。
+ * 不同失效形态对应不同根因，据此给精确 hint，避免一刀切误判。
+ */
+function diagnoseEmptyPlay(item) {
+  const keys = new Set(Object.keys(item));
+  const hasPlayFromKey = keys.has('vod_play_from');
+  const hasPlayUrlKey = keys.has('vod_play_url');
+  // 形态A：返回的是列表项（只有 vod_id/vod_name/vod_pic 等基础字段，无播放线路字段）
+  // -> 缺 detailUrl/detail 函数，二级没真正进入详情页
+  const isListItem = !hasPlayFromKey && !hasPlayUrlKey
+    && (keys.has('vod_name') || keys.has('title')) && keys.has('vod_pic')
+    && !keys.has('vod_content');
+  // 形态B：dict 二级已执行（有 vod_play_from/vod_play_url 字段但值空）
+  // -> tabs 选择器写法错（误带 &&Text）或 tabs/lists 选择器未命中 DOM
+  const isDictEmpty = hasPlayFromKey && hasPlayUrlKey;
+
+  if (isListItem) {
+    return {
+      status: 'empty',
+      item_keys: [...keys],
+      root_cause: 'likely_missing_detailUrl',
+      hint: '详情返回的是列表项(item_keys 无 vod_play_from/vod_play_url 字段，仅基础字段)，二级未真正进入详情页。根因：缺 detailUrl 或 detail 函数未取详情页 HTML。建议：补 detailUrl(如 /detail/fyid.html)，确保二级能 request 详情页。',
+    };
+  }
+  if (isDictEmpty) {
+    return {
+      status: 'empty',
+      item_keys: [...keys],
+      root_cause: 'likely_tabs_or_lists_selector',
+      hint: '二级已执行(有 vod_play_from/vod_play_url 字段但值为空)。若为 dict 二级，最高频根因是 tabs 的 && 后误写 Text/Html/属性(如 tabs:\'.module-tab-item&&Text\'，Text 非 pdfa 元素选择器，pdfa 返回空导致线路循环0次)--tabs 能带 &&，但 && 后必须是元素选择器(标签 a/dt/li、.class、#id)，文本靠 tab_text(默认 body&&Text)。也需确认 tabs/lists 选择器命中站点 DOM、tab_text 在 tab 元素上能取到文本(取空会兜底线路空)。排查：cli debug --rule <tabs选择器> --mode pdfa --url 详情页，count 应>0。详见 references-detail-dict-and-multiep.md 第4节。',
+    };
+  }
+  return {
+    status: 'empty',
+    item_keys: [...keys],
+    root_cause: 'unknown',
+    hint: '详情已返回但 vod_play_url 为空。建议 cli fetch 详情页(移动端UA) 看播放线路 DOM 结构，调整二级提取。',
+  };
+}
+
 function buildTestResult(interfaceName, success, data, error, duration) {
   const result = { interface: interfaceName, success, duration_ms: duration };
   if (data !== undefined) {
@@ -79,11 +135,17 @@ async function testDetail(sourceName, ids) {
     let detail;
     if (hasList) {
       const item = data.list[0];
+      const playUrl = item.vod_play_url || '';
       detail = {
+        vod_id: item.vod_id || item.id,
         vod_name: item.vod_name || item.title,
         vod_play_from: item.vod_play_from,
-        vod_play_url_count: item.vod_play_url ? item.vod_play_url.split('#').length : 0,
+        vod_play_url_count: playUrl ? playUrl.split('#').length : 0,
       };
+      if (!playUrl) {
+        // 根因诊断：详情已返回数据但没有播放线路。区分缺 detailUrl / tabs 误带&&Text / 选择器未命中。
+        detail.play_url_diagnosis = diagnoseEmptyPlay(item);
+      }
     }
     return {
       ...buildTestResult('二级(detail)', success, data, success ? undefined : '详情数据为空', duration),
@@ -157,7 +219,7 @@ async function evaluate(ctx) {
   const sourceName = ctx.positional[0];
   if (!sourceName) throw new Error('source 必填');
   const classId = ctx.flags['class-id'] || null;
-  const effectiveKeyword = ctx.flags.keyword === undefined ? '斗罗大陆' : ctx.flags.keyword;
+  const effectiveKeyword = ctx.flags.keyword === undefined ? defaultKeywordFor(sourceName) : ctx.flags.keyword;
 
   const overallStart = performance.now();
   const results = {
@@ -171,6 +233,7 @@ async function evaluate(ctx) {
   let firstItemIds = null;
   let firstPlayUrl = null;
   let firstPlayFlag = null;
+  let detailItem = null; // 供 play 跳过时做根因诊断
 
   // Step 1: Home
   let homeData = null;
@@ -197,6 +260,16 @@ async function evaluate(ctx) {
       if (hasList) {
         const firstItem = catData.list[0];
         firstItemIds = firstItem.vod_id || firstItem.id || firstItem.url;
+        // 一级解析失败时常见占位项：vod_id="no_data"、vod_name 含"无数据/防无限请求"。
+        // 若首项是占位，detail 串联必失败，应在一级层就标注根因，避免误判为二级问题。
+        const firstName = String(firstItem.vod_name || firstItem.title || '');
+        if (String(firstItemIds) === 'no_data' || /无数据|防无限/.test(firstName)) {
+          catResult.success = false;
+          catResult.error = `一级首项为占位(vod_id=${firstItemIds}, name=${firstName || '空'})，一级规则解析失败未取到真实列表`;
+          catResult.first_item_is_placeholder = true;
+          results.evaluation.details[results.evaluation.details.length - 1] = `❌ 一级: 首项占位 no_data (分类ID: ${firstCategoryId}, 表面${catResult.item_count}条实为占位)。根因在一级选择器(未命中站点列表DOM)，非二级/播放链路。建议 cli fetch 分类页(移动端UA) 看列表结构，调一级选择器。`;
+          firstItemIds = null; // 阻断 detail 串联，避免误判二级
+        }
       }
     } else {
       results.evaluation.details.push(`❌ 一级: ${catResult.error || '无数据'} (分类ID: ${firstCategoryId})`);
@@ -216,13 +289,18 @@ async function evaluate(ctx) {
     const detailResult = { ...buildTestResult('二级(detail)', !!hasDetailList, detailData, hasDetailList ? undefined : '详情数据为空', Math.round(performance.now() - detailStart)), test_ids: firstItemIds };
     if (hasDetailList) {
       const item = detailData.list[0];
-      detailResult.detail_preview = { vod_name: item.vod_name || item.title, vod_play_from: item.vod_play_from, vod_play_url_count: item.vod_play_url ? item.vod_play_url.split('#').length : 0 };
+      const playUrl = item.vod_play_url || '';
+      detailResult.detail_preview = { vod_id: item.vod_id || item.id, vod_name: item.vod_name || item.title, vod_play_from: item.vod_play_from, vod_play_url_count: playUrl ? playUrl.split('#').length : 0 };
+      if (!playUrl) {
+        detailResult.detail_preview.play_url_diagnosis = diagnoseEmptyPlay(item);
+      }
     }
     results.interfaces.detail = detailResult;
     if (detailResult.success) {
       results.evaluation.details.push(`✅ 二级: 正常 (ID: ${firstItemIds})`);
       if (hasDetailList) {
         const item = detailData.list[0];
+        detailItem = item;
         if (item.vod_play_url) {
           const urls = item.vod_play_url.split('#');
           if (urls.length > 0 && urls[0]) {
@@ -256,8 +334,20 @@ async function evaluate(ctx) {
     results.interfaces.play = playResult;
     results.evaluation.details.push(playResult.success ? '✅ 播放: 正常 (返回有效播放地址)' : `❌ 播放: ${playResult.error || '无有效地址'}`);
   } else {
-    results.interfaces.play = { interface: '播放(play)', success: false, error: '无可用播放URL，跳过', skipped: true };
-    results.evaluation.details.push('⏭️ 播放: 跳过 (无播放URL)');
+    let reason;
+    const detailRes = results.interfaces.detail;
+    const detailSucceeded = detailRes && detailRes.success;
+    if (!detailSucceeded) {
+      reason = detailRes && detailRes.skipped ? '二级详情跳过(无影片ID)，无播放URL' : '二级详情未通过，无播放URL可提取';
+    } else if (detailItem) {
+      reason = detailItem.vod_play_url
+        ? '详情有 vod_play_url 但首条无法解析出 url'
+        : '二级详情已返回但 vod_play_url 为空（播放线路选择器未命中或缺 detailUrl）';
+    } else {
+      reason = '二级详情为空，无播放URL';
+    }
+    results.interfaces.play = { interface: '播放(play)', success: false, error: reason, skipped: true };
+    results.evaluation.details.push(`⏭️ 播放: 跳过 (${reason})`);
   }
 
   // Score
